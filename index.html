@@ -28,15 +28,15 @@
   }
   main {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: 4vh 5vw; gap: 2.2vh;
+    text-align: center; padding: 4vh 5vw; gap: 1.6vh; min-height: 0;
   }
   #estado { font-size: clamp(1rem, 2.2vw, 1.7rem); opacity: .7; }
   #reloj {
-    font-size: min(13.5vw, 24vh); font-weight: 200; line-height: 1;
+    font-size: min(16vw, 17vh); font-weight: 200; line-height: 1;
     font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap;
   }
-  #zona { font-size: clamp(1rem, 2vw, 1.5rem); opacity: .55; }
-  #paises { font-size: clamp(1.6rem, 4.4vw, 3.6rem); font-weight: 300; max-width: 22ch; line-height: 1.15; min-height: 2.3em; }
+  #zona { font-size: clamp(1.2rem, 3vw, 2.2rem); font-weight: 300; opacity: .9; letter-spacing: .04em; }
+  #paises { font-size: clamp(1.6rem, 7vw, 3rem); font-weight: 300; max-width: 22ch; line-height: 1.15; min-height: 2.3em; }
   #paises { max-width: 28ch; }
   #paises.fade { animation: fin .6s ease; }
   @keyframes fin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -55,6 +55,13 @@
   #fiesta p { font-size: clamp(1.1rem, 2.8vw, 2.2rem); font-weight: 300; margin-top: 1.2vh; }
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
   @media (prefers-reduced-motion: reduce) { #fiesta { transition: none; } }
+  #mapwrap { position: relative; flex: 1 1 0; min-height: 140px; width: 100%; max-width: 1200px; }
+  #mapa { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #local { font-size: clamp(.78rem, 3.5vw, 1.45rem); opacity: .8; font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; }
+  @media (max-aspect-ratio: 1/1) {              /* portrait screens (phones): map keeps its own proportions, no empty black bands */
+    main { gap: 2.4vh; }
+    #mapwrap { flex: none; aspect-ratio: 360 / 145; min-height: 0; }
+  }
 </style>
 </head>
 <body>
@@ -62,6 +69,8 @@
   <p id="estado"></p>
   <div id="reloj" aria-live="off">--:--:--</div>
   <p id="zona"></p>
+  <p id="local"></p>
+  <div id="mapwrap"><canvas id="mapa"></canvas></div>
   <p id="paises"></p>
 </main>
 <footer id="pie">
@@ -149,7 +158,7 @@ const map = new Map();
 for (const [tz, name, rel] of ZONES) {
   let t;
   try { t = midnightUTC(tz); } catch (e) { console.warn("Unsupported zone:", tz); continue; }
-  if (!map.has(t)) map.set(t, { t, utc: utcLabel(tz, t), items: [] });
+  if (!map.has(t)) map.set(t, { t, utc: utcLabel(tz, t), off: Math.round(offsetMs(tz, t) / 60000), items: [] });
   map.get(t).items.push({ name, rel });
 }
 const groups = [...map.values()].sort((a, b) => a.t - b.t);
@@ -214,7 +223,7 @@ function render(t) {
       ? "Until Nut o'clock (midnight, November 1, 2026) hits the first place on Earth"
       : "Until Nut o'clock hits the next time zone";
     $("reloj").textContent = (d ? d + "d " : "") + pad(h) + ":" + pad(m) + ":" + pad(sec);
-    $("zona").textContent = g.utc + "  ·  on your device: " + fmtLocal(g.t);
+    $("zona").textContent = g.utc;
     if (passed !== shownGroup) { shownGroup = passed; shownAt = Date.now(); }
     const page = Math.floor((Date.now() - shownAt) / ROTATE_MS) % g.pages.length;
     setPaises(g.pages[page].join("  ·  "));
@@ -223,6 +232,8 @@ function render(t) {
   $("barra").firstElementChild.style.width = (passed / groups.length * 100) + "%";
   const hechos = groups.slice(Math.max(0, passed - 3), passed).map(g => g.names[0]);
   $("hechos").textContent = hechos.length ? "Nut o'clock already hit: " + hechos.reverse().join(", ") + "…" : "";
+  updateLocal(t);
+  drawMap();
 }
 
 /* ---------- Confeti (sin librerías) ---------- */
@@ -261,6 +272,122 @@ function frame() {
   raf = parts.length ? requestAnimationFrame(frame) : null;
   if (!raf) ctx.clearRect(0, 0, cv.width, cv.height);
 }
+
+/* ---------- World map (dot grid, 5° cells) ---------- */
+/* Simplified land mask: [latitude of the 5° band center, [[lon from, lon to], ...]] */
+const LAND = [
+ [82.5,[[-85,-25]]],
+ [77.5,[[-120,-80],[-75,-18],[10,28],[55,68],[95,112]]],
+ [72.5,[[-125,-95],[-90,-62],[-58,-20],[22,32],[65,80],[85,118],[120,135]]],
+ [67.5,[[-165,-62],[-55,-22],[12,180],[-180,-170]]],
+ [62.5,[[-165,-93],[-78,-60],[-52,-40],[-24,-14],[5,18],[22,180]]],
+ [57.5,[[-160,-152],[-135,-95],[-78,-57],[-6,-2],[12,17],[21,28],[28,138],[156,162]]],
+ [52.5,[[-130,-82],[-78,-56],[-10,-6],[-5,1.5],[4,140],[142,144],[156,160]]],
+ [47.5,[[-125,-53],[-5,138],[142,144]]],
+ [42.5,[[-125,-67],[-9,3],[8,14],[18,28],[41,48],[54,132],[141,146]]],
+ [37.5,[[-122,-76],[-9,0],[8,11],[12,18],[20,26],[26,44],[44,50],[54,122],[126,129],[136,141]]],
+ [32.5,[[-117,-80],[-10,24],[35,122],[130,140]]],
+ [27.5,[[-114,-98],[-83,-80],[-13,33],[36,49],[51,122]]],
+ [22.5,[[-160,-155],[-112,-109],[-106,-97],[-85,-74],[-17,37],[39,59],[69,114],[120,121]]],
+ [17.5,[[-105,-87],[-74,-68],[-17,38],[43,55],[73,83],[94,108],[120,122]]],
+ [12.5,[[-90,-84],[-72,-62],[-17,43],[49,51],[74,80],[98,109],[121,125]]],
+ [7.5,[[-85,-57],[-13,47],[80,82],[98,102],[105,109],[122,127]]],
+ [2.5,[[-78,-50],[9,45],[98,104],[109,118],[120,125]]],
+ [-2.5,[[-80,-42],[9,41],[100,106],[110,117],[120,123],[131,150]]],
+ [-7.5,[[-81,-35],[12,40],[106,114],[136,148]]],
+ [-12.5,[[-78,-38],[13,40],[45,50],[130,137],[141,143]]],
+ [-17.5,[[-71,-39],[12,37],[44,50],[122,146]]],
+ [-22.5,[[-70,-41],[14,36],[43,48],[114,150],[164,167]]],
+ [-27.5,[[-71,-48],[15,33],[114,153]]],
+ [-32.5,[[-72,-53],[17,28],[115,152]]],
+ [-37.5,[[-73,-57],[140,150],[173,178]]],
+ [-42.5,[[-74,-64],[145,148],[170,176]]],
+ [-47.5,[[-75,-66],[167,171]]],
+ [-52.5,[[-74,-68]]]
+];
+const DOTS = [];                                   // [lon, lat] of every land cell
+for (const [lat, ranges] of LAND)
+  for (let lon = -177.5; lon < 180; lon += 5)
+    if (ranges.some(([a, b]) => lon >= a && lon <= b)) DOTS.push([lon, lat]);
+
+const mapc = $("mapa"), mctx = mapc.getContext("2d");
+function inBand(lon, offMin) {                     // is this longitude inside the 15° band of that UTC offset?
+  const d = ((lon - offMin / 4 + 540) % 360 + 360) % 360 - 180;
+  return Math.abs(d) < 7.5;
+}
+/* Counter to midnight in the visitor's own time zone */
+const USER_TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (e) { return null; } })();
+let USER_T = null, USER_OFF = null;
+try { if (USER_TZ) { USER_T = midnightUTC(USER_TZ); USER_OFF = Math.round(offsetMs(USER_TZ, USER_T) / 60000); } } catch (e) {}
+function updateLocal(t) {
+  const el = $("local");
+  if (USER_T === null) { el.textContent = ""; return; }
+  const name = USER_TZ.split("/").pop().replace(/_/g, " ");
+  const sec = Math.ceil((USER_T - t) / 1000);
+  if (sec <= 0) el.textContent = "It's already Nut o'clock in your zone (" + name + ")";
+  else el.textContent = "Your time zone (" + name + "): " + Math.floor(sec / 3600) + "h " + pad(Math.floor(sec % 3600 / 60)) + "m " + pad(sec % 60) + "s left";
+  if (typeof getComputedStyle === "function") {      // safety net: shrink the text instead of wrapping it
+    el.style.fontSize = "";
+    if (el.scrollWidth > el.clientWidth + 1) el.style.fontSize = (parseFloat(getComputedStyle(el).fontSize) * el.clientWidth / el.scrollWidth) + "px";
+  }
+}
+
+function drawMap() {
+  const dpr = devicePixelRatio, W = mapc.clientWidth, H = mapc.clientHeight;
+  if (!W || !H) return;
+  if (mapc.width !== Math.round(W * dpr) || mapc.height !== Math.round(H * dpr)) {
+    mapc.width = Math.round(W * dpr); mapc.height = Math.round(H * dpr);
+  }
+  mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  mctx.clearRect(0, 0, W, H);
+  const mw = Math.min(W, H * 360 / 145), mh = mw * 145 / 360;                  // lat 85 to -60
+  const x0 = (W - mw) / 2, y0 = (H - mh) / 2, cell = mw / 72;
+  const X = lon => x0 + (lon + 180) / 360 * mw, Y = lat => y0 + (85 - lat) / 145 * mh;
+  const pulse = (Math.sin(Date.now() / 450) + 1) / 2;
+  const done = passed >= groups.length;
+  const active = done ? null : groups[passed].off;
+  const before = groups.slice(0, passed).map(g => g.off);
+
+  mctx.save();
+  mctx.beginPath(); mctx.rect(x0, y0, mw, mh); mctx.clip();
+  // time zone lines every 15°
+  mctx.strokeStyle = "rgba(255,255,255,.1)"; mctx.lineWidth = 1;
+  for (let lon = -180; lon <= 180; lon += 15) { mctx.beginPath(); mctx.moveTo(X(lon), y0); mctx.lineTo(X(lon), y0 + mh); mctx.stroke(); }
+  // band where it is about to be midnight
+  if (active !== null) {
+    const c = active / 4;
+    for (const sh of [-360, 0, 360]) {
+      const xa = X(c - 7.5 + sh), xb = X(c + 7.5 + sh);
+      mctx.fillStyle = "rgba(255,255,255," + (0.07 + 0.06 * pulse) + ")";
+      mctx.fillRect(xa, y0, xb - xa, mh);
+      mctx.strokeStyle = "rgba(255,255,255,.5)";
+      mctx.beginPath(); mctx.moveTo(xa, y0); mctx.lineTo(xa, y0 + mh); mctx.moveTo(xb, y0); mctx.lineTo(xb, y0 + mh); mctx.stroke();
+    }
+  }
+  // land dots
+  for (const [lon, lat] of DOTS) {
+    let a = .28, r = cell * .3;
+    if (done) a = .8;
+    else if (active !== null && inBand(lon, active)) { a = .6 + .4 * pulse; r = cell * .4; }
+    else if (before.some(o => inBand(lon, o))) a = .55;
+    mctx.fillStyle = "rgba(255,255,255," + a + ")";
+    mctx.beginPath(); mctx.arc(X(lon), Y(lat), r, 0, 6.2832); mctx.fill();
+  }
+  // the visitor's own time zone: dashed band with a "YOU" label
+  if (USER_OFF !== null) {
+    const c = USER_OFF / 4, fs = Math.max(10, Math.round(cell * .9));
+    mctx.setLineDash([4, 4]); mctx.strokeStyle = "rgba(255,255,255,.7)";
+    mctx.fillStyle = "#fff"; mctx.font = "600 " + fs + "px system-ui, sans-serif"; mctx.textAlign = "center";
+    for (const sh of [-360, 0, 360]) {
+      const xa = X(c - 7.5 + sh), xb = X(c + 7.5 + sh);
+      mctx.beginPath(); mctx.moveTo(xa, y0); mctx.lineTo(xa, y0 + mh); mctx.moveTo(xb, y0); mctx.lineTo(xb, y0 + mh); mctx.stroke();
+      mctx.fillText("YOU", X(c + sh), y0 + fs + 2);
+    }
+    mctx.setLineDash([]);
+  }
+  mctx.restore();
+}
+addEventListener("resize", drawMap);
 
 /* ---------- Pantalla completa con F o doble clic ---------- */
 function fs() { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
