@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nut o'clock · November 1, 2026</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: #000; color: #fff; }
+  body {
+    font-family: "Bahnschrift", "Helvetica Neue", system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; overflow: hidden; cursor: default;
+  }
+  main {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 4vh 5vw; gap: 2.2vh;
+  }
+  #estado { font-size: clamp(1rem, 2.2vw, 1.7rem); opacity: .7; }
+  #reloj {
+    font-size: min(13.5vw, 24vh); font-weight: 200; line-height: 1;
+    font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap;
+  }
+  #zona { font-size: clamp(1rem, 2vw, 1.5rem); opacity: .55; }
+  #paises { font-size: clamp(1.6rem, 4.4vw, 3.6rem); font-weight: 300; max-width: 22ch; line-height: 1.15; min-height: 2.3em; }
+  #paises { max-width: 28ch; }
+  #paises.fade { animation: fin .6s ease; }
+  @keyframes fin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  #pie { padding: 2.2vh 5vw 3vh; text-align: center; font-size: clamp(.85rem, 1.4vw, 1.1rem); opacity: .5; min-height: 4.5em; }
+  #barra { height: 2px; background: #222; margin-bottom: 1.4vh; }
+  #barra i { display: block; height: 100%; background: #fff; width: 0; transition: width .6s; }
+
+  #fiesta {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 5; text-align: center;
+    padding: 5vh 6vw 4vh; background: rgba(0,0,0,.88);
+    opacity: 0; transform: translateY(-12px); pointer-events: none;
+    transition: opacity .5s, transform .5s;
+  }
+  #fiesta.on { opacity: 1; transform: none; }
+  #fiesta h2 { font-size: clamp(2.2rem, 7vw, 6rem); font-weight: 600; line-height: 1.05; }
+  #fiesta p { font-size: clamp(1.1rem, 2.8vw, 2.2rem); font-weight: 300; margin-top: 1.2vh; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+  @media (prefers-reduced-motion: reduce) { #fiesta { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <p id="estado"></p>
+  <div id="reloj" aria-live="off">--:--:--</div>
+  <p id="zona"></p>
+  <p id="paises"></p>
+</main>
+<footer id="pie">
+  <div id="barra"><i></i></div>
+  <div id="prog"></div>
+  <div id="hechos"></div>
+</footer>
+<div id="fiesta" role="status"><h2 id="fTitulo"></h2><p id="fTexto"></p></div>
+<canvas id="c"></canvas>
+
+<script>
+"use strict";
+/* ---------- Configuración ---------- */
+const YEAR = 2026;          // midnight (00:00) on November 1 of this year
+const MONTH = 10;           // noviembre (0-indexado)
+const CELEBRATION_MS = 14000;
+const ROTATE_MS = 4000;     // how long each name stays on screen (ms)
+const PER_PAGE = 1;         // names shown at once
+
+/* Zones: [IANA zone, name, relevance 0-3]. Las de mayor relevancia (países de cultura
+   euroamericana) salen primero. Los desfases y el horario de verano los calcula el navegador. */
+const ZONES = [
+  ["Pacific/Kiritimati","Kiribati (Christmas Island)",1],
+  ["Pacific/Chatham","Chatham Islands (New Zealand)",1],
+  ["Pacific/Auckland","New Zealand",3],["Pacific/Tongatapu","Tonga",0],["Pacific/Apia","Samoa",0],["Pacific/Fakaofo","Tokelau",0],
+  ["Pacific/Fiji","Fiji",0],["Pacific/Tarawa","Kiribati (Tarawa)",0],["Pacific/Majuro","Marshall Islands",0],["Asia/Kamchatka","Kamchatka (Russia)",0],
+  ["Australia/Sydney","Australia (Sydney & Melbourne)",3],["Pacific/Noumea","New Caledonia (France)",2],["Pacific/Guadalcanal","Solomon Islands",0],["Pacific/Efate","Vanuatu",0],
+  ["Australia/Adelaide","Adelaide (Australia)",2],
+  ["Australia/Brisbane","Brisbane (Australia)",2],["Pacific/Guam","Guam (USA)",2],["Pacific/Port_Moresby","Papua New Guinea",0],["Asia/Vladivostok","Vladivostok (Russia)",0],
+  ["Australia/Darwin","Darwin (Australia)",2],
+  ["Asia/Tokyo","Japan",1],["Asia/Seoul","South Korea",1],
+  ["Asia/Shanghai","China",1],["Australia/Perth","Perth (Australia)",2],["Asia/Singapore","Singapore",0],["Asia/Manila","Philippines",0],["Asia/Hong_Kong","Hong Kong",0],
+  ["Asia/Bangkok","Thailand",0],["Asia/Jakarta","Indonesia (Jakarta)",0],["Asia/Ho_Chi_Minh","Vietnam",0],
+  ["Asia/Yangon","Myanmar",0],["Asia/Dhaka","Bangladesh",0],["Asia/Kathmandu","Nepal",0],["Asia/Kolkata","India",1],
+  ["Asia/Karachi","Pakistan",0],["Asia/Tashkent","Uzbekistan",0],["Asia/Kabul","Afghanistan",0],
+  ["Asia/Dubai","United Arab Emirates",1],["Asia/Tehran","Iran",0],
+  ["Europe/Moscow","Russia (Moscow)",1],["Europe/Istanbul","Turkey",1],["Asia/Riyadh","Saudi Arabia",0],["Africa/Nairobi","Kenya",0],
+  ["Europe/Athens","Greece",2],["Europe/Kyiv","Ukraine",2],["Europe/Helsinki","Finland",2],["Europe/Bucharest","Romania",2],
+  ["Asia/Jerusalem","Israel",1],["Africa/Johannesburg","South Africa",1],["Africa/Cairo","Egypt",1],
+  ["Europe/Madrid","Spain",3],["Europe/Paris","France",3],["Europe/Berlin","Germany",3],["Europe/Rome","Italy",3],
+  ["Europe/Amsterdam","Netherlands",2],["Europe/Zurich","Switzerland",2],["Europe/Vienna","Austria",2],["Europe/Warsaw","Poland",2],
+  ["Europe/Stockholm","Sweden",2],["Africa/Lagos","Nigeria",0],["Africa/Algiers","Algeria",0],
+  ["Europe/London","United Kingdom",3],["Europe/Lisbon","Portugal",3],["Europe/Dublin","Ireland",2],["Atlantic/Canary","Canary Islands (Spain)",3],
+  ["Atlantic/Reykjavik","Iceland",1],["Africa/Accra","Ghana",0],["Africa/Dakar","Senegal",0],
+  ["Atlantic/Azores","Azores (Portugal)",3],["Atlantic/Cape_Verde","Cape Verde",0],
+  ["America/Nuuk","Greenland (Denmark)",2],["America/Noronha","Fernando de Noronha (Brazil)",1],["Atlantic/South_Georgia","South Georgia Islands",0],
+  ["America/St_Johns","Newfoundland (Canada)",2],
+  ["America/Sao_Paulo","Brazil",3],["America/Argentina/Buenos_Aires","Argentina",3],["America/Montevideo","Uruguay",2],["America/Santiago","Chile",3],
+  ["America/Halifax","Nova Scotia (Canada)",2],["Atlantic/Bermuda","Bermuda",1],["America/Asuncion","Paraguay",2],
+  ["America/New_York","New York (USA)",3],["America/Toronto","Toronto (Canada)",3],["America/Caracas","Venezuela",2],["America/Havana","Cuba",2],
+  ["America/Puerto_Rico","Puerto Rico",2],["America/Santo_Domingo","Dominican Republic",2],["America/La_Paz","Bolivia",2],
+  ["America/Chicago","Chicago (USA)",3],["America/Bogota","Colombia",3],["America/Lima","Peru",2],["America/Guayaquil","Ecuador",2],["America/Panama","Panama",2],
+  ["America/Mexico_City","Mexico",3],["America/Denver","Denver (USA)",3],["America/Edmonton","Alberta (Canada)",2],["America/Guatemala","Guatemala",2],
+  ["America/Costa_Rica","Costa Rica",2],["America/El_Salvador","El Salvador",2],["America/Tegucigalpa","Honduras",2],["America/Managua","Nicaragua",2],
+  ["America/Los_Angeles","Los Angeles (USA)",3],["America/Vancouver","Vancouver (Canada)",3],["America/Phoenix","Arizona (USA)",2],["America/Tijuana","Tijuana (Mexico)",2],
+  ["America/Anchorage","Alaska (USA)",2],
+  ["America/Adak","Aleutian Islands (USA)",2],["Pacific/Gambier","Gambier Islands (French Polynesia)",0],
+  ["Pacific/Marquesas","Marquesas Islands (French Polynesia)",0],
+  ["Pacific/Honolulu","Hawaii (USA)",3],["Pacific/Tahiti","Tahiti (French Polynesia)",2],
+  ["Pacific/Pago_Pago","American Samoa (USA)",2],["Pacific/Niue","Niue",0],
+  ["Etc/GMT+12","Baker & Howland Islands (USA, uninhabited)",0]
+];
+
+/* ---------- Cálculo de zonas horarias ---------- */
+function offsetMs(tz, utc) {
+  const p = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric",
+    hour: "numeric", minute: "numeric", second: "numeric"
+  }).formatToParts(new Date(utc));
+  const o = {}; p.forEach(x => o[x.type] = +x.value);
+  return Date.UTC(o.year, o.month - 1, o.day, o.hour, o.minute, o.second) - Math.floor(utc / 1000) * 1000;
+}
+function midnightUTC(tz) {                       // instante UTC en que en `tz` son las 00:00 del 1/nov
+  const g = Date.UTC(YEAR, MONTH, 1, 0, 0, 0);
+  const t1 = g - offsetMs(tz, g);
+  return g - offsetMs(tz, t1);
+}
+function utcLabel(tz, t) {
+  const m = Math.round(offsetMs(tz, t) / 60000), s = m < 0 ? "-" : "+", a = Math.abs(m);
+  const h = Math.floor(a / 60), mm = a % 60;
+  return "UTC" + s + h + (mm ? ":" + String(mm).padStart(2, "0") : "");
+}
+
+const map = new Map();
+for (const [tz, name, rel] of ZONES) {
+  let t;
+  try { t = midnightUTC(tz); } catch (e) { console.warn("Unsupported zone:", tz); continue; }
+  if (!map.has(t)) map.set(t, { t, utc: utcLabel(tz, t), items: [] });
+  map.get(t).items.push({ name, rel });
+}
+const groups = [...map.values()].sort((a, b) => a.t - b.t);
+for (const g of groups) {
+  g.items.sort((a, b) => b.rel - a.rel);
+  // If the zone has Euro-American countries (relevance 2+), drop the less relevant ones
+  if (g.items.some(i => i.rel >= 2)) g.items = g.items.filter(i => i.rel >= 2);
+  g.names = g.items.map(i => i.name);
+  g.pages = [];                                   // rotating pages of PER_PAGE names
+  for (let i = 0; i < g.names.length; i += PER_PAGE) g.pages.push(g.names.slice(i, i + PER_PAGE));
+  const top = g.names.slice(0, 5), rest = g.names.length - top.length;   // text for the celebration message
+  g.text = top.join(", ") + (rest > 0 ? " and " + rest + " more" : "");
+}
+
+/* ---------- Reloj (con parámetros de prueba) ---------- */
+const q = new URLSearchParams(location.search);
+const t0 = Date.now();
+const base = q.get("now") ? Date.parse(q.get("now")) : t0;   // e.g. ?now=2026-10-31T09:59:40Z
+const speed = +q.get("speed") || 1;                              // e.g. &speed=60
+const now = () => base + (Date.now() - t0) * speed;
+
+/* ---------- Interfaz ---------- */
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const fmtLocal = t => new Date(t).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+let passed = 0, fiestaTimer = null, shownGroup = -1, shownAt = 0;
+function setPaises(txt) {                          // updates the countries line with a soft fade
+  const el = $("paises");
+  if (el.dataset.t === txt) return;
+  el.dataset.t = txt; el.textContent = txt;
+  el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade");
+}
+
+function celebrate(g, last) {
+  $("fTitulo").textContent = last ? "Nut o'clock has hit the whole world!" : "It's Nut o'clock!";
+  $("fTexto").textContent = last
+    ? "Midnight on November 1 has now passed in every time zone."
+    : "It's midnight on November 1 in " + g.text + ".";
+  $("fiesta").classList.add("on");
+  clearTimeout(fiestaTimer);
+  fiestaTimer = setTimeout(() => $("fiesta").classList.remove("on"), last ? CELEBRATION_MS * 2 : CELEBRATION_MS);
+  confetti(last ? 2.2 : 1);
+}
+
+function render(t) {
+  while (passed < groups.length && groups[passed].t <= t) {
+    if (t - groups[passed].t < 20000) celebrate(groups[passed], passed === groups.length - 1);
+    passed++;
+  }
+  const done = passed >= groups.length;
+  if (done) {
+    $("estado").textContent = "";
+    $("reloj").textContent = "00:00:00";
+    $("zona").textContent = "";
+    setPaises("Nut o'clock has reached the whole world");
+  } else {
+    const g = groups[passed];
+    let s = Math.max(0, Math.ceil((g.t - t) / 1000));
+    const d = Math.floor(s / 86400); s -= d * 86400;
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    $("estado").textContent = passed === 0
+      ? "Until Nut o'clock (midnight, November 1, 2026) hits the first place on Earth"
+      : "Until Nut o'clock hits the next time zone";
+    $("reloj").textContent = (d ? d + "d " : "") + pad(h) + ":" + pad(m) + ":" + pad(sec);
+    $("zona").textContent = g.utc + "  ·  on your device: " + fmtLocal(g.t);
+    if (passed !== shownGroup) { shownGroup = passed; shownAt = Date.now(); }
+    const page = Math.floor((Date.now() - shownAt) / ROTATE_MS) % g.pages.length;
+    setPaises(g.pages[page].join("  ·  "));
+  }
+  $("prog").textContent = "Zones celebrated: " + passed + " of " + groups.length;
+  $("barra").firstElementChild.style.width = (passed / groups.length * 100) + "%";
+  const hechos = groups.slice(Math.max(0, passed - 3), passed).map(g => g.names[0]);
+  $("hechos").textContent = hechos.length ? "Nut o'clock already hit: " + hechos.reverse().join(", ") + "…" : "";
+}
+
+/* ---------- Confeti (sin librerías) ---------- */
+const cv = $("c"), ctx = cv.getContext("2d");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let parts = [], raf = null;
+function resize() { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; }
+addEventListener("resize", resize); resize();
+const COLORS = ["#ff4d6d", "#ffd166", "#06d6a0", "#4cc9f0", "#c77dff", "#ffffff", "#ff9f1c"];
+function confetti(power) {
+  if (reduce) return;
+  const W = cv.width, H = cv.height, k = devicePixelRatio, n = Math.round(150 * power);
+  for (let i = 0; i < n; i++) {                      // cañones desde las dos esquinas inferiores
+    const left = i % 2 === 0, ang = (left ? -60 : -120) * Math.PI / 180 + (Math.random() - .5) * .9;
+    const v = (14 + Math.random() * 14) * k;
+    parts.push(p(left ? 0 : W, H, Math.cos(ang) * v, Math.sin(ang) * v));
+  }
+  for (let i = 0; i < n; i++) parts.push(p(Math.random() * W, -20 * k - Math.random() * H * .5, (Math.random() - .5) * 3 * k, 2 * k + Math.random() * 3 * k)); // lluvia
+  if (!raf) raf = requestAnimationFrame(frame);
+  function p(x, y, vx, vy) {
+    return { x, y, vx, vy, w: (6 + Math.random() * 8) * k, h: (4 + Math.random() * 6) * k,
+             r: Math.random() * 6.28, vr: (Math.random() - .5) * .35, c: COLORS[Math.random() * COLORS.length | 0] };
+  }
+}
+function frame() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const k = devicePixelRatio;
+  parts = parts.filter(q => q.y < cv.height + 40 * k);
+  for (const q of parts) {
+    q.vy += .35 * k; q.vx *= .985; q.vy *= .985;
+    q.x += q.vx; q.y += q.vy; q.r += q.vr;
+    ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r);
+    ctx.fillStyle = q.c; ctx.fillRect(-q.w / 2, -q.h / 2, q.w, q.h * Math.abs(Math.cos(q.r * 2)) + k);
+    ctx.restore();
+  }
+  raf = parts.length ? requestAnimationFrame(frame) : null;
+  if (!raf) ctx.clearRect(0, 0, cv.width, cv.height);
+}
+
+/* ---------- Pantalla completa con F o doble clic ---------- */
+function fs() { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
+addEventListener("keydown", e => { if (e.key === "f" || e.key === "F") fs(); });
+addEventListener("dblclick", fs);
+
+setInterval(() => render(now()), 200);
+render(now());
+</script>
+</body>
+</html>
