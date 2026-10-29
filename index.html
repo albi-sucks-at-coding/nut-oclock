@@ -237,41 +237,118 @@ function render(t) {
 }
 
 /* ---------- Confeti (sin librerías) ---------- */
-const cv = $("c"), ctx = cv.getContext("2d");
-const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-let parts = [], raf = null;
-function resize() { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; }
-addEventListener("resize", resize); resize();
-const COLORS = ["#ff4d6d", "#ffd166", "#06d6a0", "#4cc9f0", "#c77dff", "#ffffff", "#ff9f1c"];
-function confetti(power) {
-  if (reduce) return;
-  const W = cv.width, H = cv.height, k = devicePixelRatio, n = Math.round(150 * power);
-  for (let i = 0; i < n; i++) {                      // cañones desde las dos esquinas inferiores
-    const left = i % 2 === 0, ang = (left ? -60 : -120) * Math.PI / 180 + (Math.random() - .5) * .9;
-    const v = (14 + Math.random() * 14) * k;
-    parts.push(p(left ? 0 : W, H, Math.cos(ang) * v, Math.sin(ang) * v));
-  }
-  for (let i = 0; i < n; i++) parts.push(p(Math.random() * W, -20 * k - Math.random() * H * .5, (Math.random() - .5) * 3 * k, 2 * k + Math.random() * 3 * k)); // lluvia
-  if (!raf) raf = requestAnimationFrame(frame);
-  function p(x, y, vx, vy) {
-    return { x, y, vx, vy, w: (6 + Math.random() * 8) * k, h: (4 + Math.random() * 6) * k,
-             r: Math.random() * 6.28, vr: (Math.random() - .5) * .35, c: COLORS[Math.random() * COLORS.length | 0] };
-  }
+const cv = $("c");
+const ctx = cv.getContext("2d");
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+let parts = [];
+let raf = null;
+
+function resizeConfettiCanvas() {
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  cv.width = Math.round(window.innerWidth * dpr);
+  cv.height = Math.round(window.innerHeight * dpr);
 }
+window.addEventListener("resize", resizeConfettiCanvas);
+resizeConfettiCanvas();
+
+const COLORS = ["#ff4d6d", "#ffd166", "#06d6a0", "#4cc9f0", "#c77dff", "#ffffff", "#ff9f1c"];
+
+function makeParticle(x, y, vx, vy, scale) {
+  return {
+    x, y, vx, vy,
+    w: (6 + Math.random() * 8) * scale,
+    h: (4 + Math.random() * 6) * scale,
+    r: Math.random() * Math.PI * 2,
+    vr: (Math.random() - 0.5) * 0.35,
+    c: COLORS[Math.floor(Math.random() * COLORS.length)]
+  };
+}
+
+function confetti(power = 1) {
+  if (!ctx || reduceMotion.matches) return;
+
+  const scale = Math.max(1, window.devicePixelRatio || 1);
+  const W = cv.width, H = cv.height;
+  const n = Math.max(1, Math.round(150 * power));
+
+  // Cañones desde las esquinas inferiores.
+  for (let i = 0; i < n; i++) {
+    const left = i % 2 === 0;
+    const angle = (left ? -60 : -120) * Math.PI / 180
+      + (Math.random() - 0.5) * 0.9;
+    const velocity = (14 + Math.random() * 14) * scale;
+    parts.push(makeParticle(
+      left ? 0 : W, H,
+      Math.cos(angle) * velocity,
+      Math.sin(angle) * velocity,
+      scale
+    ));
+  }
+
+  // Lluvia de confeti desde la parte superior.
+  for (let i = 0; i < n; i++) {
+    parts.push(makeParticle(
+      Math.random() * W,
+      -20 * scale - Math.random() * H * 0.5,
+      (Math.random() - 0.5) * 3 * scale,
+      (2 + Math.random() * 3) * scale,
+      scale
+    ));
+  }
+
+  // Evita acumular una cantidad enorme si varias zonas celebran a la vez.
+  if (parts.length > 3000) parts = parts.slice(-3000);
+  if (raf === null) raf = window.requestAnimationFrame(frame);
+}
+
 function frame() {
+  if (!ctx) { raf = null; parts = []; return; }
+
   ctx.clearRect(0, 0, cv.width, cv.height);
-  const k = devicePixelRatio;
-  parts = parts.filter(q => q.y < cv.height + 40 * k);
-  for (const q of parts) {
-    q.vy += .35 * k; q.vx *= .985; q.vy *= .985;
-    q.x += q.vx; q.y += q.vy; q.r += q.vr;
-    ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r);
-    ctx.fillStyle = q.c; ctx.fillRect(-q.w / 2, -q.h / 2, q.w, q.h * Math.abs(Math.cos(q.r * 2)) + k);
+  const scale = Math.max(1, window.devicePixelRatio || 1);
+  const bottom = cv.height + 40 * scale;
+
+  parts = parts.filter(particle => particle.y < bottom);
+
+  for (const particle of parts) {
+    particle.vy += 0.35 * scale;
+    particle.vx *= 0.985;
+    particle.vy *= 0.985;
+    particle.x += particle.vx;
+    particle.y += particle.vy;
+    particle.r += particle.vr;
+
+    ctx.save();
+    ctx.translate(particle.x, particle.y);
+    ctx.rotate(particle.r);
+    ctx.fillStyle = particle.c;
+    ctx.fillRect(
+      -particle.w / 2,
+      -particle.h / 2,
+      particle.w,
+      particle.h * Math.abs(Math.cos(particle.r * 2)) + scale
+    );
     ctx.restore();
   }
-  raf = parts.length ? requestAnimationFrame(frame) : null;
-  if (!raf) ctx.clearRect(0, 0, cv.width, cv.height);
+
+  if (parts.length) {
+    raf = window.requestAnimationFrame(frame);
+  } else {
+    raf = null;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+  }
 }
+
+// Si el sistema cambia la preferencia de movimiento durante la visita,
+// detén la animación de inmediato cuando se solicite reducir movimiento.
+reduceMotion.addEventListener?.("change", event => {
+  if (event.matches) {
+    parts = [];
+    if (raf !== null) cancelAnimationFrame(raf);
+    raf = null;
+    ctx?.clearRect(0, 0, cv.width, cv.height);
+  }
+});
 
 /* ---------- World map (dot grid, 5° cells) ---------- */
 /* Simplified land mask: [latitude of the 5° band center, [[lon from, lon to], ...]] */
