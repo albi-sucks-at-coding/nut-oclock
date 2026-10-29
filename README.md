@@ -1,4 +1,4 @@
-# 🌰 nut-oclock
+# 🌰 Nut o'clock
 
 Nut O'clock is a silly little joke project that tracks every time zone on Earth and counts down to midnight on November 1st, 2026, wherever that happens to be next. When the clock strikes, there's confetti, a message, and the countdown moves on to the next time zone, until the whole world has made it through.
 
