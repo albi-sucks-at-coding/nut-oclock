@@ -30,34 +30,36 @@
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; padding: 4vh 5vw; gap: 1.6vh; min-height: 0;
   }
-  #estado { font-size: clamp(1rem, 2.2vw, 1.7rem); opacity: .7; }
+  #estado { font-size: clamp(1rem, 2.2vw, 1.7rem); opacity: .7; line-height: 1.3; height: 2.6em; display: flex; align-items: center; justify-content: center; }
   #reloj {
     font-size: min(16vw, 17vh); font-weight: 200; line-height: 1;
     font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap;
   }
-  #zona { font-size: clamp(1.2rem, 3vw, 2.2rem); font-weight: 300; opacity: .9; letter-spacing: .04em; }
-  #paises { font-size: clamp(1.6rem, 7vw, 3rem); font-weight: 300; max-width: 22ch; line-height: 1.15; min-height: 2.3em; }
+  #zona { font-size: clamp(1.2rem, 3vw, 2.2rem); font-weight: 300; opacity: .9; letter-spacing: .04em; height: 1.3em; line-height: 1.3em; }
+  #paises { font-size: clamp(1.6rem, 7vw, 3rem); font-weight: 300; max-width: 22ch; line-height: 1.15; height: 2.4em; display: flex; align-items: center; justify-content: center; }
   #paises { max-width: 28ch; }
   #paises.fade { animation: fin .6s ease; }
   @keyframes fin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  #pie { padding: 2.2vh 5vw 3vh; text-align: center; font-size: clamp(.85rem, 1.4vw, 1.1rem); opacity: .5; min-height: 4.5em; }
+  #pie { padding: 2.2vh 5vw 3vh; text-align: center; font-size: clamp(.85rem, 1.4vw, 1.1rem); opacity: .5; }
+  #prog, #hechos { height: 1.5em; line-height: 1.5em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   #barra { height: 2px; background: #222; margin-bottom: 1.4vh; }
   #barra i { display: block; height: 100%; background: #fff; width: 0; transition: width .6s; }
 
   #fiesta {
-    position: fixed; left: 0; right: 0; top: 0; z-index: 5; text-align: center;
-    padding: 5vh 6vw 4vh; background: rgba(0,0,0,.88);
-    opacity: 0; transform: translateY(-12px); pointer-events: none;
+    position: absolute; inset: 0; z-index: 5; text-align: center; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 1.2vh 4%; background: rgba(0,0,0,.62);
+    opacity: 0; transform: scale(.97); pointer-events: none;
     transition: opacity .5s, transform .5s;
   }
   #fiesta.on { opacity: 1; transform: none; }
-  #fiesta h2 { font-size: clamp(2.2rem, 7vw, 6rem); font-weight: 600; line-height: 1.05; }
-  #fiesta p { font-size: clamp(1.1rem, 2.8vw, 2.2rem); font-weight: 300; margin-top: 1.2vh; }
+  #fiesta h2 { font-size: clamp(1.3rem, 5.5vw, 3.6rem); font-weight: 600; line-height: 1.05; }
+  #fiesta p { font-size: clamp(.8rem, 2.5vw, 1.6rem); font-weight: 300; margin-top: .6vh; line-height: 1.25; }
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
   @media (prefers-reduced-motion: reduce) { #fiesta { transition: none; } }
   #mapwrap { position: relative; flex: 1 1 0; min-height: 140px; width: 100%; max-width: 1200px; }
   #mapa { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  #local { font-size: clamp(.78rem, 3.5vw, 1.45rem); opacity: .8; font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; }
+  #local { font-size: clamp(.78rem, 3.5vw, 1.45rem); opacity: .8; font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; height: 1.4em; line-height: 1.4em; }
   @media (max-aspect-ratio: 1/1) {              /* portrait screens (phones): map keeps its own proportions, no empty black bands */
     main { gap: 2.4vh; }
     #mapwrap { flex: none; aspect-ratio: 360 / 145; min-height: 0; }
@@ -70,7 +72,7 @@
   <div id="reloj" aria-live="off">--:--:--</div>
   <p id="zona"></p>
   <p id="local"></p>
-  <div id="mapwrap"><canvas id="mapa"></canvas></div>
+  <div id="mapwrap"><canvas id="mapa"></canvas><div id="fiesta" role="status"><h2 id="fTitulo"></h2><p id="fTexto"></p></div></div>
   <p id="paises"></p>
 </main>
 <footer id="pie">
@@ -78,7 +80,6 @@
   <div id="prog"></div>
   <div id="hechos"></div>
 </footer>
-<div id="fiesta" role="status"><h2 id="fTitulo"></h2><p id="fTexto"></p></div>
 <canvas id="c"></canvas>
 
 <script>
@@ -171,6 +172,7 @@ for (const g of groups) {
   for (let i = 0; i < g.names.length; i += PER_PAGE) g.pages.push(g.names.slice(i, i + PER_PAGE));
   const top = g.names.slice(0, 5), rest = g.names.length - top.length;   // text for the celebration message
   g.text = top.join(", ") + (rest > 0 ? " and " + rest + " more" : "");
+  g.short = g.names.slice(0, 3).join(", ") + (g.names.length > 3 ? " and " + (g.names.length - 3) + " more" : "");
 }
 
 /* ---------- Reloj (con parámetros de prueba) ---------- */
@@ -196,7 +198,7 @@ function celebrate(g, last) {
   $("fTitulo").textContent = last ? "Nut o'clock has hit the whole world!" : "It's Nut o'clock!";
   $("fTexto").textContent = last
     ? "Midnight on November 1 has now passed in every time zone."
-    : "It's midnight on November 1 in " + g.text + ".";
+    : "It's midnight on November 1 in " + g.short + ".";
   $("fiesta").classList.add("on");
   clearTimeout(fiestaTimer);
   fiestaTimer = setTimeout(() => $("fiesta").classList.remove("on"), last ? CELEBRATION_MS * 2 : CELEBRATION_MS);
@@ -313,7 +315,7 @@ for (const [lat, ranges] of LAND)
 const mapc = $("mapa"), mctx = mapc.getContext("2d");
 function inBand(lon, offMin) {                     // is this longitude inside the 15° band of that UTC offset?
   const d = ((lon - offMin / 4 + 540) % 360 + 360) % 360 - 180;
-  return Math.abs(d) < 7.5;
+  return Math.abs(d) <= 7.5 + 1e-9;               // "<=": dots sitting exactly on a band edge belong to both neighbours
 }
 /* Counter to midnight in the visitor's own time zone */
 const USER_TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (e) { return null; } })();
