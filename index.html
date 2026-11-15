@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="A countdown to midnight on November 1, 2026, time zone by time zone, with confetti.">
+<meta name="description" content="A countdown to midnight on November 1, 2027, time zone by time zone, with confetti.">
 <meta name="theme-color" content="#000000">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Nut o'clock · November 1, 2026">
-<meta property="og:description" content="A countdown to midnight on November 1, 2026, time zone by time zone, with confetti.">
+<meta property="og:title" content="Nut o'clock · November 1, 2027">
+<meta property="og:description" content="A countdown to midnight on November 1, 2027, time zone by time zone, with confetti.">
 <meta property="og:url" content="https://albi-sucks-at-coding.github.io/nut-oclock/">
 <meta property="og:image" content="https://albi-sucks-at-coding.github.io/nut-oclock/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Nut o'clock: midnight, November 1, 2026">
+<meta property="og:image:alt" content="Nut o'clock: midnight, November 1, 2027">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Nut o'clock · November 1, 2026">
-<meta name="twitter:description" content="A countdown to midnight on November 1, 2026, time zone by time zone, with confetti.">
+<meta name="twitter:title" content="Nut o'clock · November 1, 2027">
+<meta name="twitter:description" content="A countdown to midnight on November 1, 2027, time zone by time zone, with confetti.">
 <meta name="twitter:image" content="https://albi-sucks-at-coding.github.io/nut-oclock/og-image.png">
-<title>Nut o'clock · November 1, 2026</title>
+<title>Nut o'clock · November 1, 2027</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; }
@@ -178,7 +178,7 @@ for (const g of groups) {
 /* ---------- Reloj (con parámetros de prueba) ---------- */
 const q = new URLSearchParams(location.search);
 const t0 = Date.now();
-const base = q.get("now") ? Date.parse(q.get("now")) : t0;   // e.g. ?now=2026-10-31T09:59:40Z
+const base = q.get("now") ? Date.parse(q.get("now")) : t0;   // e.g. ?now=2027-10-31T09:59:40Z
 const speed = +q.get("speed") || 1;                              // e.g. &speed=60
 const now = () => base + (Date.now() - t0) * speed;
 
@@ -222,7 +222,7 @@ function render(t) {
     const d = Math.floor(s / 86400); s -= d * 86400;
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     $("estado").textContent = passed === 0
-      ? "Until Nut o'clock (midnight, November 1, 2026) hits the first place on Earth"
+      ? "Until Nut o'clock (midnight, November 1, 2027) hits the first place on Earth"
       : "Until Nut o'clock hits the next time zone";
     $("reloj").textContent = (d ? d + "d " : "") + pad(h) + ":" + pad(m) + ":" + pad(sec);
     $("zona").textContent = g.utc;
